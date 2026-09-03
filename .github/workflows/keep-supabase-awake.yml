@@ -1,0 +1,46 @@
+# Supabase pauses a free project after 7 days with no API requests. Nothing
+# about the app itself prevents that: while it has no regular users, whole
+# weeks pass with no traffic, the project pauses, and sign-in then fails with
+# no obvious cause because the database hostname stops resolving entirely.
+#
+# One cheap read every three days is enough to reset that timer. Three days
+# rather than six so a single failed run cannot let the window lapse.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: '0 6 */3 * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the passages table
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "SUPABASE_URL / SUPABASE_ANON_KEY repository secrets are not set."
+            echo "Add them under Settings -> Secrets and variables -> Actions."
+            echo "Skipping rather than failing, so this does not email a failure every run."
+            exit 0
+          fi
+
+          # Row Level Security means an anonymous read returns an empty list.
+          # That is fine: the request itself is what counts as activity, and
+          # asking for no rows keeps it as cheap as possible.
+          code=$(curl -s -o /tmp/body.txt -w '%{http_code}' --max-time 30 \
+            "$SUPABASE_URL/rest/v1/passages?select=id&limit=0" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "Unexpected response body:"
+            cat /tmp/body.txt
+            echo "The project may be paused. Restore it at https://supabase.com/dashboard"
+            exit 1
+          fi
+          echo "Project is awake."
