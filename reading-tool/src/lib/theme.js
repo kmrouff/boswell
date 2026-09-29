@@ -87,4 +87,8 @@ export const applyThemeVars = (t, el = document.documentElement) => {
   el.style.setProperty('--on-fill', t.onFill);
   el.style.setProperty('--on-acc', t.onAcc);
   el.style.setProperty('--radius', t.radius);
+  // Themes are written straight onto the document root, so React never
+  // re-renders on a theme change. Anything that has to *read* a token back
+  // (rather than just referencing it in CSS) needs telling.
+  window.dispatchEvent(new CustomEvent('theme-changed'));
 };

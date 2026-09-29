@@ -6,9 +6,29 @@ import PassageCard, { HeartIcon } from './PassageCard.jsx';
 import StackedCard from './StackedCard.jsx';
 import PendingPassageCard from './PendingPassageCard.jsx';
 import SettingsDrawer from './SettingsDrawer.jsx';
+import { titleSpineColor } from '../lib/titleColor.js';
 
 const MISC = 'Miscellaneous';
 const UNDO_WINDOW_MS = 5000;
+
+// Width of the per-title color spine on a group header. Wide enough to read
+// at a glance while scrolling, narrow enough that the header still reads as
+// one accent-colored block rather than as two stripes.
+const SPINE_WIDTH_PX = 5;
+
+// The spine's lightness depends on how bright the current accent is, so the
+// accent has to be read back out of the document rather than just referenced
+// in CSS. theme.js fires 'theme-changed' whenever it rewrites the tokens.
+const useAccentTriple = () => {
+  const readAccent = () => getComputedStyle(document.documentElement).getPropertyValue('--acc');
+  const [accent, setAccent] = useState(readAccent);
+  useEffect(() => {
+    const onThemeChange = () => setAccent(readAccent());
+    window.addEventListener('theme-changed', onThemeChange);
+    return () => window.removeEventListener('theme-changed', onThemeChange);
+  }, []);
+  return accent;
+};
 
 // Groups a list (already filtered/ordered) into render units: passages that
 // share a stackId with 2+ others in this same list become one 'stack' unit
@@ -46,6 +66,7 @@ function DotsIcon() {
 }
 
 export default function LibraryView({ onRequestTitle, flashRequest }) {
+  const accentTriple = useAccentTriple();
   const [passages, setPassages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -420,12 +441,20 @@ export default function LibraryView({ onRequestTitle, flashRequest }) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(title)}
-                  className="mt-2.5 flex w-full items-center gap-2.5 border-none px-[15px] py-3.5 text-left shadow-sm"
+                  className="relative mt-2.5 flex w-full items-center gap-2.5 overflow-hidden border-none px-[15px] py-3.5 text-left shadow-sm"
                   style={{
                     background: 'rgb(var(--acc))',
                     borderRadius: 'var(--radius)',
                   }}
                 >
+                  {/* Decorative only: the title itself is right there in the
+                      button, so the spine carries no information a screen
+                      reader would otherwise miss. */}
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 left-0"
+                    style={{ width: SPINE_WIDTH_PX, background: titleSpineColor(title, accentTriple) }}
+                  />
                   <span className="w-3 shrink-0 text-[11px]" style={{ color: 'rgb(var(--on-acc) / .7)' }}>
                     {open ? '▾' : '▸'}
                   </span>
